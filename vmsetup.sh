@@ -86,8 +86,8 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
 			--onboot 1 \
 			--ostype l26 \
 			--tablet 0 \
-			--serial0 socket
-			--display serial0
+			--serial0 socket \
+			--vga serial0 \
 			--boot c --bootdisk scsi0
 
 template_vmcreated=$(date +%Y-%m-%d)
