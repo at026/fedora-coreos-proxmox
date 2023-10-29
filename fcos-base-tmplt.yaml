@@ -6,6 +6,7 @@
           #!/bin/bash
           
           OUT=/etc/console-login-helper-messages/motd.d/22_geco.motd
+          touch $(OUT)
           
           echo -e "\nWelcome on a server powered by\n" > ${OUT}
           echo -e '\e[33m    ______                      _ ______' >> ${OUT}
@@ -274,7 +275,20 @@
            '  '--'  | \\   --. \\ `--. ' '-' '         |  |    |  |
             `------'   `----'  `---'  `---'          `--'    `--'
             
-          .
+# autologin tty
+    - path: /etc/profile.d/systemd-pager.sh
+      mode: 0644
+      contents:
+        inline: |
+          # Tell systemd to not use a pager when printing information
+          export SYSTEMD_PAGER=cat
+
+# vim install
+    - path: /etc/profile.d/zz-default-editor.sh
+      overwrite: true
+      contents:
+        inline: |
+          export EDITOR=vim
 
 # kernel config
     - path: /etc/sysctl.d/20-silence-audit.conf
@@ -285,6 +299,10 @@
           # to hide audit messages from the interactive console
           kernel.printk=4
 
+# kernel commands
+kernel_arguments:
+  should_exist:
+    - console=ttys0
 
 # geco-motd.service
 systemd:
@@ -330,6 +348,9 @@ systemd:
         [Unit]
         Description=Geco-iT Setup Qemu Guest Agent
         After=network-online.target
+        # We run before `zincati.service` to avoid conflicting rpm-ostree
+        # transactions.
+        Before=zincati.service        
         Require=network-online.target
         ConditionKernelCommandLine=ignition.platform.id=qemu
         ConditionPathExists=!/var/lib/qemu-guest-agent.stamp
@@ -355,3 +376,40 @@ systemd:
             [Service]
             ExecStart=
             ExecStart=/sbin/fstrim -av
+
+# autologin tty
+    - name: serial-getty@ttyS0.service
+      dropins:
+      - name: autologin-core.conf
+        contents: |
+          [Service]
+          # Override Execstart in main unit
+          ExecStart=
+          # Add new Execstart with `-` prefix to ignore failure`
+          ExecStart=-/usr/sbin/agetty --autologin core --noclear %I $TERM
+
+# vim install
+    - name: rpm-ostree-install-vim.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Layer vim with rpm-ostree
+        Wants=network-online.target
+        After=network-online.target
+        # We run before `zincati.service` to avoid conflicting rpm-ostree
+        # transactions.
+        Before=zincati.service
+        ConditionPathExists=!/var/lib/%N.stamp
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        # `--allow-inactive` ensures that rpm-ostree does not return an error
+        # if the package is already installed. This is useful if the package is
+        # added to the root image in a future Fedora CoreOS release as it will
+        # prevent the service from failing.
+        ExecStart=/usr/bin/rpm-ostree install --apply-live --allow-inactive vim
+        ExecStart=/bin/touch /var/lib/%N.stamp
+
+        [Install]
+        WantedBy=multi-user.target

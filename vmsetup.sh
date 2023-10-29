@@ -11,8 +11,8 @@ export LANG=C
 export LC_ALL=C
 
 # template vm vars
-TEMPLATE_VMID="900"
-TEMPLATE_VMSTORAGE="local"
+TEMPLATE_VMID="1000"
+TEMPLATE_VMSTORAGE="local-lvm"
 SNIPPET_STORAGE="local"
 VMDISK_OPTIONS=",discard=on"
 
@@ -20,7 +20,7 @@ TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
 
 # fcos version
 STREAMS=stable
-VERSION=32.20201018.3.0
+VERSION=38.20231002.3.1
 PLATEFORM=qemu
 BASEURL=https://builds.coreos.fedoraproject.org
 
@@ -80,12 +80,14 @@ echo "Create fedora coreos vm ${VMID}"
 qm create ${TEMPLATE_VMID} --name fcos-tmplt
 qm set ${TEMPLATE_VMID} --memory 4096 \
 			--cpu host \
-			--cores 4 \
+			--cores 2 \
 			--agent enabled=1 \
 			--autostart \
 			--onboot 1 \
 			--ostype l26 \
 			--tablet 0 \
+			--serial0 socket
+			--display serial0
 			--boot c --bootdisk scsi0
 
 template_vmcreated=$(date +%Y-%m-%d)
