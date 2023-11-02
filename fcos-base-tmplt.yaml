@@ -1,14 +1,43 @@
-# motd script
+# This file is managed by Geco-iT hook-script. Do not edit.
+variant: fcos
+version: 1.5.0
+# user
+passwd:
+  users:
+    - name: admin # default user, Do no edit.
+      gecos: Geco-iT CoreOS Administrator
+      password_hash: ''
+      groups:
+        - sudo
+        - docker
+        - adm
+        - wheel
+        - systemd-journal
+      ssh_authorized_keys:
+        - ''
+storage:
+  files:
+    # hostname
+    - path: /etc/hostname # default hostname, Do no edit.
+      mode: 0644
+      overwrite: true
+      contents:
+        inline:
+    # network
+    - path: # default networks
+      mode: 0600
+      overwrite: true
+      contents:
+        inline:
+    # motd script
     - path: /usr/local/bin/geco-motd
       mode: 0755
       contents:
-        inline: |
+        inline: |+
           #!/bin/bash
-          
-          OUT=/etc/console-login-helper-messages/motd.d/22_geco.motd
-          mkdir -p /etc/console-login-helper-messages/motd.d
-          touch $(OUT)
-          
+
+          OUT=/etc/motd.d/22_geco.motd
+
           echo -e "\nWelcome on a server powered by\n" > ${OUT}
           echo -e '\e[33m    ______                      _ ______' >> ${OUT}
           echo -e '\e[33m   / ____/__  _________        (_)_  __/' >> ${OUT}
@@ -26,15 +55,28 @@
                 echo -e "\e[33mHDD${i} ($(basename ${disk})):\e[0m$(lsblk -n --nodeps ${disk} -o size)" >> ${OUT}
                 i=$((i+1))
           done
-          echo -e "\n\e[33mHostname:\e[0m "$(hostname -f) >> ${OUT}  
+          echo -e "\n\e[33mHostname:\e[0m "$(hostname -f) >> ${OUT}
           sleep 1; echo -e "\e[33mIPv4 Address:\e[0m $(ip route get 8.8.8.8 | awk 'NR==1 {print $7}')" >> ${OUT}
           echo -e "\e[33mPublic IPv4 Address:\e[0m $(curl https://ipv4.icanhazip.com)\n" >> ${OUT}
 
-# apply cloudinit script
+      # geco-issue
+    - path: /etc/issue.d/00_geco.issue
+      mode: 0644
+      contents:
+        inline: |+
+          Welcome on a server powered by
+
+            ,----.                                   ,--. ,--------.
+           '  .-./     ,---.   ,---.  ,---.  ,-----. `--' '--.  .--'
+           |  | .---. | .-. : | .--' | .-. | '-----' ,--.    |  |
+           '  '--'  | \\   --. \\ `--. ' '-' '         |  |    |  |
+            `------'   `----'  `---'  `---'          `--'    `--'
+
+    # apply cloudinit script
     - path: /usr/local/bin/geco-cloudinit
       mode: 0755
       contents:
-        inline: |
+        inline: |+
           #!/bin/bash
           #
           #  Copyright (c) 2020 Geco-iT Team - All right reserved
@@ -64,7 +106,7 @@
           sysprep() {
             echo "Remove all ssh system keys..."
             rm -f /etc/ssh/ssh_host_*
-            
+
             echo "Clean ostree database..."
             rpm-ostree cleanup --base --pending --rollback --repomd
 
@@ -92,9 +134,9 @@
             echo -e "\nShutdown now..."
             poweroff
 
-            exit 0  
+            exit 0
           }
-          [[ "x${1}" == "xsysprep" ]]&& sysprep          
+          [[ "x${1}" == "xsysprep" ]]&& sysprep
 
           setup_yq() {
             local VER=3.4.1
@@ -260,51 +302,33 @@
             /bin/systemctl --no-block reboot
           }
 
-          exit 0 
+          exit 0
 
-# geco-issue
-    - path: /etc/console-login-helper-messages/issue.d/00_geco.issue
-      mode: 0644
-      contents:
-        inline: |
-
-          Welcome on a server powered by
-
-            ,----.                                   ,--. ,--------.
-           '  .-./     ,---.   ,---.  ,---.  ,-----. `--' '--.  .--'
-           |  | .---. | .-. : | .--' | .-. | '-----' ,--.    |  |
-           '  '--'  | \\   --. \\ `--. ' '-' '         |  |    |  |
-            `------'   `----'  `---'  `---'          `--'    `--'
-            
-# autologin tty
+    # autologin tty
     - path: /etc/profile.d/systemd-pager.sh
       mode: 0644
       contents:
         inline: |
           # Tell systemd to not use a pager when printing information
           export SYSTEMD_PAGER=cat
-
-# vim install
+    # vim install
     - path: /etc/profile.d/zz-default-editor.sh
       overwrite: true
       contents:
         inline: |
           export EDITOR=vim
-
-# kernel config
+    # kernel config
     - path: /etc/sysctl.d/20-silence-audit.conf
-      mode: 0644      
+      mode: 0644
       contents:
         inline: |
           # Raise console message logging level from DEBUG (7) to WARNING (4)
           # to hide audit messages from the interactive console
           kernel.printk=4
-
 # kernel commands
 kernel_arguments:
   should_exist:
-    - console=ttys0
-
+    - console=ttys0,115200
 # geco-motd.service
 systemd:
   units:
@@ -323,8 +347,7 @@ systemd:
 
         [Install]
         WantedBy=multi-user.target
-
-# geco-cloudinit: apply cloudinit settings on boot
+    # geco-cloudinit: apply cloudinit settings on boot
     - name: geco-cloudinit.service
       enabled: true
       contents: |
@@ -332,44 +355,18 @@ systemd:
         Description=Geco-iT Cloudinit
         Wants=network-online.target
         After=network.target network-online.target
- 
+
         [Service]
         Type=oneshot
         TimeoutStartSec=0
         ExecStart=/usr/local/bin/geco-cloudinit
         RemainAfterExit=yes
- 
-        [Install]
-        WantedBy=multi-user.target
-
-# qemu-guest-agent
-    - name: setup-qemu-guest-agent.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Geco-iT Setup Qemu Guest Agent
-        After=network-online.target
-        # We run before `zincati.service` to avoid conflicting rpm-ostree
-        # transactions.
-        Before=zincati.service        
-        Require=network-online.target
-        ConditionKernelCommandLine=ignition.platform.id=qemu
-        ConditionPathExists=!/var/lib/qemu-guest-agent.stamp
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        ExecStart=/bin/rpm-ostree install qemu-guest-agent --apply-live --allow-inactive
-        ExecStart=/bin/touch /var/lib/qemu-guest-agent.stamp
-        ExecStart=/bin/systemctl --no-block reboot
 
         [Install]
         WantedBy=multi-user.target
-
-# fstrim
+    # fstrim
     - name: fstrim.timer
       enabled: true
- 
     - name: fstrim.service
       dropins:
         - name: override.conf
@@ -377,15 +374,59 @@ systemd:
             [Service]
             ExecStart=
             ExecStart=/sbin/fstrim -av
-
-# autologin tty
+    # autologin tty
     - name: serial-getty@ttyS0.service
       dropins:
-      - name: autologin-core.conf
-        contents: |
-          [Service]
-          # Override Execstart in main unit
-          ExecStart=
-          # Add new Execstart with `-` prefix to ignore failure`
-          ExecStart=-/usr/sbin/agetty --autologin admin --noclear %I $TERM
+        - name: autologin-core.conf
+          contents: |
+            [Service]
+            # Override Execstart in main unit
+            ExecStart=
+            # Add new Execstart with `-` prefix to ignore failure`
+            ExecStart=-/usr/sbin/agetty --autologin admin --noclear %I $TERM
+    # qemu-guest-agent
+    - name: rpm-ostree-install-qemu-guest-agent.service
+      enabled: true
+      contents: |+
+        [Unit]
+        Description=Geco-iT Setup Qemu Guest Agent
+        Wants=network-online.target
+        After=network-online.target
+        Before=zincati.service
+        ConditionKernelCommandLine=ignition.platform.id=qemu
+        ConditionPathExists=!/var/lib/qemu-guest-agent.stamp
 
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/bin/rpm-ostree install --allow-inactive  --reboot qemu-guest-agent
+        ExecStart=/bin/touch /var/lib/qemu-guest-agent.stamp
+
+        [Install]
+        WantedBy=multi-user.target
+    # Installing additional package as a layered package with rpm-ostree
+    - name: rpm-ostree-install-extension.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Layer vim with rpm-ostree
+        Wants=network-online.target
+        After=network-online.target
+        After=rpm-ostree-install-qemu-guest-agent.service
+        # We run before `zincati.service` to avoid conflicting rpm-ostree
+        # transactions.
+        Before=zincati.service
+        ConditionPathExists=!/var/lib/%N.stamp
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        # `--allow-inactive` ensures that rpm-ostree does not return an error
+        # if the package is already installed. This is useful if the package is
+        # added to the root image in a future Fedora CoreOS release as it will
+        # prevent the service from failing.
+        ExecStart=/usr/bin/rpm-ostree install --allow-inactive --apply-live vim buildah podman-compose
+        ExecStart=/bin/touch /var/lib/%N.stamp
+
+        [Install]
+        WantedBy=multi-user.target
