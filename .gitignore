@@ -3,7 +3,7 @@
 
 #Remove debian packages
 *.deb
-
+*.qcow2
 #Editor's swap files
 #Gay
 *~

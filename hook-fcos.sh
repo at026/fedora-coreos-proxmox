@@ -108,19 +108,19 @@ then
 
 	echo -n "Fedora CoreOS: Generate yaml hostname block...           "
 	hostname="$(qm cloudinit dump ${vmid} user | ${YQ} '.hostname' 2> /dev/null)"
-	#key_index="$(($(${YQ} '.storage.files | length' ${COREOS_FILES_PATH}/${vmid}.yaml 2>/dev/null )+1))"
 	key_index=0
 	${YQ} -i ".storage.files[${key_index}].path = \"/etc/hostname\"" ${COREOS_FILES_PATH}/${vmid}.yaml
 	${YQ} -i ".storage.files[${key_index}].mode = 0644" ${COREOS_FILES_PATH}/${vmid}.yaml
 	${YQ} -i ".storage.files[${key_index}].overwrite = true" ${COREOS_FILES_PATH}/${vmid}.yaml
 	${YQ} -i ".storage.files[${key_index}].contents.inline = \"${hostname,,}\"" ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "[done]"
-
+set -x
 	echo -n "Fedora CoreOS: Generate yaml network block...            "
-	netcards="$(($(qm cloudinit dump ${vmid} network | ${YQ} '.config[].name' 2> /dev/null | wc -l)))"
-	nameservers="$(qm cloudinit dump ${vmid} network | ${YQ} .config[${netcards}].address[] | paste -s -d ";" -)"
-	searchdomain="$(qm cloudinit dump ${vmid} network | ${YQ} .config[${netcards}].search[] | paste -s -d ";" -)"
+	netcards="$(qm cloudinit dump ${vmid} network | ${YQ} '.config[] | select(.type == "physical").name' 2> /dev/null | wc -l)"
+	nameservers="$(qm cloudinit dump ${vmid} network | ${YQ} '.config[] | select(.type == "nameserver").address[]' | paste -s -d ";" -)"
+	searchdomain="$(qm cloudinit dump ${vmid} network | ${YQ} '.config[] | select(.type == "nameserver").search[]' | paste -s -d ";" -)"
 	key_index=1
+	[[ ${netcards} -eq null ]] && ${YQ} -i 'delpaths([["storage","files", 1]])' ${COREOS_FILES_PATH}/${vmid}.yaml # remove networks default block
 	for (( i=O; i<${netcards}; i++ ))
 	do
 		index=$(( ${key_index} + ${i} ))
@@ -137,7 +137,7 @@ gateway=${gateway4}
 dns=${nameservers}
 dns-search=${searchdomain}
 "
-		}
+		}	
 		# ipv6:
 		ipv6="$(qm cloudinit dump ${vmid} network | ${YQ} .config[${i}].subnets[1].address 2> /dev/null)" && {
 		gateway6="$(qm cloudinit dump ${vmid} network | ${YQ} .config[${i}].subnets[1].gateway 2> /dev/null)" || true # can be empty
@@ -147,10 +147,7 @@ addresses=${ipv6}
 gateway=${gateway6}
 "
 		}
-		[[ "${ipv4}" -eq null && "${ipv6}" -eq null ]] && {				# if ipv4 and ipv6 not set will skip
-			[[ $netcards -lt 2 ]] && ${YQ} -i 'delpaths([["storage","files", 1]])' ${COREOS_FILES_PATH}/${vmid}.yaml
-			continue
-		}
+		[[ "${ipv4}" -eq null && "${ipv6}" -eq null ]] && continue			# if ipv4 and ipv6 not set will skip	
 		[[ ${index} -gt 1 ]] && ${YQ} -i '.storage.files = (.storage.files | .[0:'${index}'] + [ null ] + .['${index}':]) ' ${COREOS_FILES_PATH}/${vmid}.yaml # appending network block after previous network
 		${YQ} -i ".storage.files[${index}].path = \"/etc/NetworkManager/system-connections/net${i}.nmconnection\"" ${COREOS_FILES_PATH}/${vmid}.yaml
 		${YQ} -i ".storage.files[${index}].mode = 0600" ${COREOS_FILES_PATH}/${vmid}.yaml
